@@ -12,6 +12,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+
     # -------------------------------
     # 1. CHECKOUT
     # -------------------------------
@@ -85,26 +86,27 @@ jobs:
         mkdir -p coverage
         mkdir -p TestResults
 
-        echo "Running MSTest..."
+        echo "Running UNIT TESTS..."
+
         dotnet test TestProject1.Unit.tests/TestProject1.Unit.tests.csproj \
           --configuration Release \
           --logger "trx;LogFileName=test_results.trx" \
           --results-directory TestResults \
           /p:CollectCoverage=true \
-          /p:CoverletOutput=$(pwd)/coverage/unit.opencover.xml \
+          /p:CoverletOutput=$(pwd)/coverage/unit \
           /p:CoverletOutputFormat=opencover
+
+    - name: Upload Test Results (.trx)
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results
+        path: TestResults/test_results.trx
 
     - name: Upload Coverage Reports
       uses: actions/upload-artifact@v4
       with:
         name: coverage-report
         path: coverage/*.opencover.xml
-
-    - name: Upload Test Result File
-      uses: actions/upload-artifact@v4
-      with:
-        name: test-results
-        path: TestResults/test_results.trx
 
     # -------------------------------
     # 7. SONAR CLOUD - END
