@@ -29,11 +29,11 @@ jobs:
       # SonarCloud - Begin Analysis
       - name: SonarCloud - Begin Analysis
         env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}   # Use the secret for authentication
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}  # Use the secret for authentication
         run: |
           dotnet-sonarscanner begin \
-            /k:"${{ secrets.SONAR_PROJECT }}"  # Using the SONAR_PROJECT secret
-            /o:"${{ secrets.SONAR_ORG }}"  # Using the SONAR_ORG secret
+            /k:"${{ secrets.SONAR_PROJECT }}"  # Use the SONAR_PROJECT secret
+            /o:"${{ secrets.SONAR_ORG }}"  # Use the SONAR_ORG secret
             /d:sonar.host.url="https://sonarcloud.io" \
             /d:sonar.login="${{ secrets.SONAR_TOKEN }}" \
             /d:sonar.cs.opencover.reportsPaths="coverage/*.opencover.xml"
