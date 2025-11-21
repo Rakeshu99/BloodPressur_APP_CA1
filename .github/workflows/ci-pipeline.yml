@@ -2,74 +2,59 @@ name: CI Pipeline - Build, Test, and SonarCloud Analysis
 
 on:
   push:
-    branches: ["main"]  # Trigger the workflow on push to the main branch
+    branches: ["main"]
   pull_request:
-    branches: ["main"]  # Trigger on pull request to the main branch
-  workflow_dispatch:  # Allows you to manually trigger the workflow
+    branches: ["main"]
+  workflow_dispatch:
 
 jobs:
   ci:
     runs-on: ubuntu-latest
 
     steps:
-      # Checkout the code
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # Setup .NET SDK
       - name: Set up .NET SDK
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '9.0.x'
 
-      # Install SonarScanner for .NET
       - name: Install SonarScanner for .NET
         run: dotnet tool install --global dotnet-sonarscanner
 
-      # SonarCloud - Begin Analysis
       - name: SonarCloud - Begin Analysis
         env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}  # Use the secret for authentication
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: |
           dotnet-sonarscanner begin \
-            /k:"${{ secrets.SONAR_PROJECT }}"  # Use the SONAR_PROJECT secret
-            /o:"${{ secrets.SONAR_ORG }}"  # Use the SONAR_ORG secret
+            /k:"${{ secrets.SONAR_PROJECT }}" \
+            /o:"${{ secrets.SONAR_ORG }}" \
             /d:sonar.host.url="https://sonarcloud.io" \
             /d:sonar.login="${{ secrets.SONAR_TOKEN }}" \
-            /d:sonar.cs.opencover.reportsPaths="coverage/*.opencover.xml"
+            /d:sonar.cs.opencover.reportsPaths="coverage/unit.opencover.xml"
 
-      # Restore dependencies
       - name: Restore Dependencies
         run: dotnet restore
 
-      # Build the project
       - name: Build Project
         run: dotnet build --configuration Release
 
-      # Run Unit Tests and Generate Code Coverage
       - name: Run Unit Tests and Generate Code Coverage
         run: |
           mkdir -p coverage
-          echo "Running UNIT TESTS..."
-          dotnet test TestProject1.Unit.tests/TestProject1.Unit.tests.csproj --configuration Release \
-              /p:CollectCoverage=true \
-              /p:CoverletOutput=$(pwd)/coverage/unit.opencover.xml \
-              /p:CoverletOutputFormat=opencover
+          dotnet test TestProject1.Unit.tests/TestProject1.Unit.tests.csproj \
+            --configuration Release \
+            /p:CollectCoverage=true \
+            /p:CoverletOutput=$(pwd)/coverage/unit.opencover.xml \
+            /p:CoverletOutputFormat=opencover
 
-      # Upload Unit Test Results and Code Coverage Reports
-      - name: Upload Test Results and Coverage Report
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-results
-          path: TestResults/test_results.trx
-          
       - name: Upload Coverage Report
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
           path: coverage/*.opencover.xml
 
-      # SonarCloud - End Analysis
       - name: SonarCloud - End Analysis
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
