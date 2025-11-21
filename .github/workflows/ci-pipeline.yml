@@ -1,4 +1,4 @@
-name: CI Pipeline - Build, Test, and SonarCloud Analysis
+name: CI Pipeline - Build, Test, SonarCloud
 
 on:
   push:
@@ -12,50 +12,96 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+    # -------------------------------
+    # 1. CHECKOUT
+    # -------------------------------
+    - name: Checkout Repository
+      uses: actions/checkout@v4
 
-      - name: Set up .NET SDK
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '9.0.x'
+    # -------------------------------
+    # 2. OWASP DEPENDENCY CHECK
+    # -------------------------------
+    - name: Cache Dependency-Check Data
+      uses: actions/cache@v4
+      with:
+        path: ~/.dependency-check
+        key: ${{ runner.os }}-dependency-check
+        restore-keys: |
+          ${{ runner.os }}-dependency-check
 
-      - name: Install SonarScanner for .NET
-        run: dotnet tool install --global dotnet-sonarscanner
+    - name: Run OWASP Dependency Check
+      uses: dependency-check/Dependency-Check_Action@main
+      with:
+        project: "bp"
+        path: "."
+        format: "HTML"
+        out: "dependency-check-output"
 
-      - name: SonarCloud - Begin Analysis
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        run: |
-          dotnet-sonarscanner begin \
-            /k:"${{ secrets.SONAR_PROJECT }}" \
-            /o:"${{ secrets.SONAR_ORG }}" \
-            /d:sonar.host.url="https://sonarcloud.io" \
-            /d:sonar.login="${{ secrets.SONAR_TOKEN }}" \
-            /d:sonar.cs.opencover.reportsPaths="coverage/unit.opencover.xml"
+    - name: Upload Dependency Report
+      uses: actions/upload-artifact@v4
+      with:
+        name: dependency-report
+        path: dependency-check-output
 
-      - name: Restore Dependencies
-        run: dotnet restore
+    # -------------------------------
+    # 3. .NET SETUP
+    # -------------------------------
+    - name: Setup .NET 9
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: "9.0.x"
 
-      - name: Build Project
-        run: dotnet build --configuration Release
+    # -------------------------------
+    # 4. SONAR CLOUD - BEGIN
+    # -------------------------------
+    - name: Install SonarScanner for .NET
+      run: dotnet tool install --global dotnet-sonarscanner
 
-      - name: Run Unit Tests and Generate Code Coverage
-        run: |
-          mkdir -p coverage
-          dotnet test TestProject1.Unit.tests/TestProject1.Unit.tests.csproj \
-            --configuration Release \
-            /p:CollectCoverage=true \
-            /p:CoverletOutput=$(pwd)/coverage/unit.opencover.xml \
-            /p:CoverletOutputFormat=opencover
+    - name: SonarCloud - Begin Analysis
+      env:
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      run: |
+        dotnet-sonarscanner begin \
+          /k:"${{ secrets.SONAR_PROJECT }}" \
+          /o:"${{ secrets.SONAR_ORG }}" \
+          /d:sonar.host.url="https://sonarcloud.io" \
+          /d:sonar.login="${{ secrets.SONAR_TOKEN }}" \
+          /d:sonar.cs.opencover.reportsPaths="coverage/*.opencover.xml"
 
-      - name: Upload Coverage Report
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-report
-          path: coverage/*.opencover.xml
+    # -------------------------------
+    # 5. RESTORE + BUILD
+    # -------------------------------
+    - name: Restore
+      run: dotnet restore
 
-      - name: SonarCloud - End Analysis
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        run: dotnet-sonarscanner end /d:sonar.login="${{ secrets.SONAR_TOKEN }}"
+    - name: Build (Release)
+      run: dotnet build --configuration Release --no-restore
+
+    # -------------------------------
+    # 6. UNIT TESTS + COVERAGE
+    # -------------------------------
+    - name: Run MSTest with coverage
+      run: |
+        mkdir -p coverage
+
+        echo "Running UNIT TESTS..."
+        dotnet test TestProject1.Unit.tests/TestProject1.Unit.tests.csproj \
+          --configuration Release \
+          --no-build \
+          /p:CollectCoverage=true \
+          /p:CoverletOutput=$(pwd)/coverage/unit.opencover.xml \
+          /p:CoverletOutputFormat=opencover
+
+    - name: Upload Coverage Reports
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-report
+        path: coverage/*.opencover.xml
+
+    # -------------------------------
+    # 7. SONAR CLOUD - END
+    # -------------------------------
+    - name: SonarCloud - End Analysis
+      env:
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      run: dotnet-sonarscanner end /d:sonar.login="${{ secrets.SONAR_TOKEN }}"
