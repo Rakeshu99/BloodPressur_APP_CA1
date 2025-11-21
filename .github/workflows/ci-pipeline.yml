@@ -12,7 +12,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-
     # -------------------------------
     # 1. CHECKOUT
     # -------------------------------
@@ -86,8 +85,8 @@ jobs:
         mkdir -p coverage
         mkdir -p TestResults
 
-        echo "Running UNIT TESTS..."
-        dotnet test BloodPressur_APP_CA1/TestProject1.Unit.tests/TestProject1.Unit.tests.csproj \
+        echo "Running MSTest..."
+        dotnet test TestProject1.Unit.tests/TestProject1.Unit.tests.csproj \
           --configuration Release \
           --logger "trx;LogFileName=test_results.trx" \
           --results-directory TestResults \
