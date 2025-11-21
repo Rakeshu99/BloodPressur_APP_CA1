@@ -12,55 +12,50 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    # ----------------------------------------------------
-    # 1. CHECKOUT REPOSITORY
-    # ----------------------------------------------------
+    # -------------------------------------------------
+    # 1. CHECKOUT
+    # -------------------------------------------------
     - name: Checkout Repository
       uses: actions/checkout@v4
 
-    # ----------------------------------------------------
+    # -------------------------------------------------
     # 2. OWASP DEPENDENCY CHECK
-    # ----------------------------------------------------
-    - name: Cache Dependency Check Database
+    # -------------------------------------------------
+    - name: Cache Dependency-Check Data
       uses: actions/cache@v4
       with:
         path: ~/.dependency-check
-        key: ${{ runner.os }}-dc
-        restore-keys: |
-          ${{ runner.os }}-dc
+        key: ${{ runner.os }}-depcheck
 
-    - name: Run OWASP Dependency Check
+    - name: OWASP Dependency Check
       uses: dependency-check/Dependency-Check_Action@main
       with:
-        project: "BloodPressure_APP"
+        project: "BloodPressure"
         path: "."
         format: "HTML"
-        out: "dependency-check-report"
+        out: "dependency-check-output"
 
     - name: Upload Dependency Report
       uses: actions/upload-artifact@v4
       with:
         name: dependency-report
-        path: dependency-check-report
+        path: dependency-check-output
 
-    # ----------------------------------------------------
-    # 3. SETUP .NET 9
-    # ----------------------------------------------------
-    - name: Setup .NET SDK
+    # -------------------------------------------------
+    # 3. .NET SETUP
+    # -------------------------------------------------
+    - name: Setup .NET 9
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: "9.0.x"
 
-    # ----------------------------------------------------
-    # 4. INSTALL SONAR SCANNER
-    # ----------------------------------------------------
+    # -------------------------------------------------
+    # 4. SONAR BEGIN
+    # -------------------------------------------------
     - name: Install SonarScanner
       run: dotnet tool install --global dotnet-sonarscanner
 
-    # ----------------------------------------------------
-    # 5. SONAR CLOUD - BEGIN ANALYSIS
-    # ----------------------------------------------------
-    - name: SonarCloud - Begin Analysis
+    - name: SonarCloud - Begin
       env:
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
       run: |
@@ -71,32 +66,37 @@ jobs:
           /d:sonar.login="${{ secrets.SONAR_TOKEN }}" \
           /d:sonar.cs.opencover.reportsPaths="coverage/*.xml"
 
-    # ----------------------------------------------------
-    # 6. RESTORE & BUILD
-    # ----------------------------------------------------
-    - name: Restore Packages
+    # -------------------------------------------------
+    # 5. BUILD + RESTORE
+    # -------------------------------------------------
+    - name: Restore
       run: dotnet restore
 
-    - name: Build (Release)
+    - name: Build Release
       run: dotnet build --configuration Release --no-restore
 
-    # ----------------------------------------------------
-    # 7. RUN TESTS + COVERAGE
-    # ----------------------------------------------------
-    - name: Run Unit Tests with Coverage
+    # -------------------------------------------------
+    # 6. UNIT TESTS + COVERAGE
+    # -------------------------------------------------
+    - name: Run Unit Tests With Coverage
       run: |
         mkdir -p coverage
-
-        echo "Running UNIT TESTS..."
         dotnet test TestProject1.Unit.tests/TestProject1.Unit.tests.csproj \
-          --configuration Release \
-          --no-build \
+          --configuration Release --no-build \
           /p:CollectCoverage=true \
           /p:CoverletOutput=$(pwd)/coverage/ \
           /p:CoverletOutputFormat=opencover
 
-    # ----------------------------------------------------
-    # 8. UPLOAD COVERAGE ARTIFACTS
-    # ----------------------------------------------------
     - name: Upload Coverage Report
-      uses: actions/up
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-report
+        path: coverage/*.xml
+
+    # -------------------------------------------------
+    # 7. SONAR END
+    # -------------------------------------------------
+    - name: SonarCloud - End
+      env:
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      run: dotnet-sonarscanner end /d:sonar.login="${{ secrets.SONAR_TOKEN }}"
