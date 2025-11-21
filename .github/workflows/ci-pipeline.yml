@@ -2,7 +2,7 @@ name: CI Pipeline - Build, Test, and SonarCloud Analysis
 
 on:
   push:
-    branches: ["main"]  # Trigger on push to the main branch
+    branches: ["main"]  # Trigger the workflow on push to the main branch
   pull_request:
     branches: ["main"]  # Trigger on pull request to the main branch
   workflow_dispatch:  # Allows you to manually trigger the workflow
@@ -12,41 +12,41 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1: Checkout the code from GitHub
+      # Checkout the code
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # Step 2: Setup .NET SDK
+      # Setup .NET SDK
       - name: Set up .NET SDK
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '9.0.x'
 
-      # Step 3: Install SonarScanner for .NET
+      # Install SonarScanner for .NET
       - name: Install SonarScanner for .NET
         run: dotnet tool install --global dotnet-sonarscanner
 
-      # Step 4: SonarCloud - Begin Analysis
+      # SonarCloud - Begin Analysis
       - name: SonarCloud - Begin Analysis
         env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}   # Use the secret for authentication
         run: |
           dotnet-sonarscanner begin \
-            /k:"BloodPressur_APP_CA1" \
-            /o:"Rakeshu99" \
+            /k:"${{ secrets.SONAR_PROJECT }}"  # Using the SONAR_PROJECT secret
+            /o:"${{ secrets.SONAR_ORG }}"  # Using the SONAR_ORG secret
             /d:sonar.host.url="https://sonarcloud.io" \
             /d:sonar.login="${{ secrets.SONAR_TOKEN }}" \
             /d:sonar.cs.opencover.reportsPaths="coverage/*.opencover.xml"
 
-      # Step 5: Restore dependencies
+      # Restore dependencies
       - name: Restore Dependencies
         run: dotnet restore
 
-      # Step 6: Build the project
+      # Build the project
       - name: Build Project
         run: dotnet build --configuration Release
 
-      # Step 7: Run Unit Tests with Coverlet and Generate Code Coverage
+      # Run Unit Tests and Generate Code Coverage
       - name: Run Unit Tests and Generate Code Coverage
         run: |
           mkdir -p coverage
@@ -56,7 +56,7 @@ jobs:
               /p:CoverletOutput=$(pwd)/coverage/unit.opencover.xml \
               /p:CoverletOutputFormat=opencover
 
-      # Step 8: Upload Unit Test Results and Code Coverage Reports
+      # Upload Unit Test Results and Code Coverage Reports
       - name: Upload Test Results and Coverage Report
         uses: actions/upload-artifact@v4
         with:
@@ -69,7 +69,7 @@ jobs:
           name: coverage-report
           path: coverage/*.opencover.xml
 
-      # Step 9: SonarCloud - End Analysis
+      # SonarCloud - End Analysis
       - name: SonarCloud - End Analysis
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
