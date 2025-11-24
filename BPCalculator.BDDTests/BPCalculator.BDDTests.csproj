@@ -1,15 +1,21 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <IsTestProject>true</IsTestProject>
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- REQUIRED TO RUN BDD TESTS IN MSTest -->
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageReference Include="MSTest.TestAdapter" Version="3.9.1" />
     <PackageReference Include="MSTest.TestFramework" Version="3.9.1" />
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+
+    <!-- REQNROLL BDD PACKAGES (CORRECT VERSIONS) -->
+    <PackageReference Include="Reqnroll" Version="3.2.1" />
+    <PackageReference Include="Reqnroll.MsTest" Version="3.2.1" />
   </ItemGroup>
 
   <ItemGroup>

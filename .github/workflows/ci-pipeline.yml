@@ -1,4 +1,4 @@
-name: CI Pipeline - Build, Test, SonarCloud
+name: CI Pipeline - Build, Test, BDD, SonarCloud
 
 on:
   push:
@@ -15,7 +15,7 @@ jobs:
     # -------------------------------------------------
     # 1. CHECKOUT
     # -------------------------------------------------
-    - name: Checkout Repository
+    - name: Checkout repository
       uses: actions/checkout@v4
 
     # -------------------------------------------------
@@ -27,7 +27,7 @@ jobs:
         path: ~/.dependency-check
         key: ${{ runner.os }}-depcheck
 
-    - name: OWASP Dependency Check
+    - name: Run OWASP Dependency-Check
       uses: dependency-check/Dependency-Check_Action@main
       with:
         project: "BloodPressure"
@@ -35,27 +35,30 @@ jobs:
         format: "HTML"
         out: "dependency-check-output"
 
-    - name: Upload Dependency Report
+    - name: Upload OWASP Report
       uses: actions/upload-artifact@v4
       with:
         name: dependency-report
         path: dependency-check-output
 
     # -------------------------------------------------
-    # 3. .NET SETUP
+    # 3. SETUP .NET SDK
     # -------------------------------------------------
-    - name: Setup .NET 9
+    - name: Setup .NET 9 SDK
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: "9.0.x"
 
     # -------------------------------------------------
-    # 4. SONAR BEGIN
+    # 4. INSTALL SONAR SCANNER
     # -------------------------------------------------
-    - name: Install SonarScanner
+    - name: Install SonarScanner for .NET
       run: dotnet tool install --global dotnet-sonarscanner
 
-    - name: SonarCloud - Begin
+    # -------------------------------------------------
+    # 5. SONAR BEGIN
+    # -------------------------------------------------
+    - name: SonarCloud - Begin Analysis
       env:
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
       run: |
@@ -64,39 +67,63 @@ jobs:
           /o:"${{ secrets.SONAR_ORG }}" \
           /d:sonar.host.url="https://sonarcloud.io" \
           /d:sonar.login="${{ secrets.SONAR_TOKEN }}" \
+          /d:sonar.cs.vstest.reportsPaths="TestResults/*.trx" \
           /d:sonar.cs.opencover.reportsPaths="coverage/*.xml"
 
     # -------------------------------------------------
-    # 5. BUILD + RESTORE
+    # 6. RESTORE + BUILD
     # -------------------------------------------------
-    - name: Restore
+    - name: Restore packages
       run: dotnet restore
 
-    - name: Build Release
+    - name: Build solution
       run: dotnet build --configuration Release --no-restore
 
     # -------------------------------------------------
-    # 6. UNIT TESTS + COVERAGE
+    # 7. RUN UNIT TESTS + BDD TESTS + COVERAGE
     # -------------------------------------------------
-    - name: Run Unit Tests With Coverage
+    - name: Run ALL Tests (Unit + BDD) with coverage
       run: |
         mkdir -p coverage
+        mkdir -p TestResults
+
+        echo "Running UNIT TESTS..."
         dotnet test TestProject1.Unit.tests/TestProject1.Unit.tests.csproj \
-          --configuration Release --no-build \
+          --configuration Release \
+          --logger "trx;LogFileName=unit_tests.trx" \
+          --results-directory TestResults \
           /p:CollectCoverage=true \
-          /p:CoverletOutput=$(pwd)/coverage/ \
+          /p:CoverletOutput=$(pwd)/coverage/unit_ \
           /p:CoverletOutputFormat=opencover
 
-    - name: Upload Coverage Report
+        echo "Running BDD TESTS..."
+        dotnet test BPCalculator.BDDTests/BPCalculator.BDDTests.csproj \
+          --configuration Release \
+          --logger "trx;LogFileName=bdd_tests.trx" \
+          --results-directory TestResults \
+          /p:CollectCoverage=true \
+          /p:CoverletOutput=$(pwd)/coverage/bdd_ \
+          /p:CoverletOutputFormat=opencover
+
+    # -------------------------------------------------
+    # 8. UPLOAD TEST RESULTS + COVERAGE
+    # -------------------------------------------------
+    - name: Upload Test Results
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results
+        path: TestResults/*.trx
+
+    - name: Upload Coverage Reports
       uses: actions/upload-artifact@v4
       with:
         name: coverage-report
         path: coverage/*.xml
 
     # -------------------------------------------------
-    # 7. SONAR END
+    # 9. SONAR END
     # -------------------------------------------------
-    - name: SonarCloud - End
+    - name: SonarCloud - End Analysis
       env:
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
       run: dotnet-sonarscanner end /d:sonar.login="${{ secrets.SONAR_TOKEN }}"
