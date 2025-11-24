@@ -1,4 +1,4 @@
-name: CI Pipeline - Build, Test, SonarCloud
+name: CI Pipeline
 
 on:
   push:
@@ -12,15 +12,15 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    # -------------------------------------------------
-    # 1. CHECKOUT
-    # -------------------------------------------------
-    - name: Checkout Repository
+    - name: Checkout
       uses: actions/checkout@v4
 
-    # -------------------------------------------------
-    # 2. OWASP DEPENDENCY CHECK
-    # -------------------------------------------------
+    - name: Setup .NET 9
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: "9.0.x"
+
+    # --- Dependency Check ---
     - name: Cache Dependency-Check Data
       uses: actions/cache@v4
       with:
@@ -41,25 +41,12 @@ jobs:
         name: dependency-report
         path: dependency-check-output
 
-    # -------------------------------------------------
-    # 3. SETUP .NET 9 SDK
-    # -------------------------------------------------
-    - name: Setup .NET 9
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: "9.0.x"
-
-    # Install reportgenerator (required to convert coverage → XML)
-    - name: Install ReportGenerator
-      run: dotnet tool install -g dotnet-reportgenerator-globaltool
-
-    # -------------------------------------------------
-    # 4. SONAR - BEGIN
-    # -------------------------------------------------
+    # --- Install SonarScanner ---
     - name: Install SonarScanner
       run: dotnet tool install --global dotnet-sonarscanner
 
-    - name: SonarCloud - Begin
+    # --- Sonar Begin ---
+    - name: SonarCloud Begin
       env:
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
       run: |
@@ -67,57 +54,42 @@ jobs:
           /k:"${{ secrets.SONAR_PROJECT }}" \
           /o:"${{ secrets.SONAR_ORG }}" \
           /d:sonar.host.url="https://sonarcloud.io" \
-          /d:sonar.login="${{ secrets.SONAR_TOKEN }}" \
-          /d:sonar.cs.vstest.reportsPaths="TestResults/**/*.trx" \
-          /d:sonar.coverageReportPaths="coverage/Cobertura.xml"
+          /d:sonar.cs.vstest.reportsPaths="TestResults/*.trx" \
+          /d:sonar.cs.cobertura.reportsPaths="TestResults/**/coverage.cobertura.xml" \
+          /d:sonar.login="${{ secrets.SONAR_TOKEN }}"
 
-    # -------------------------------------------------
-    # 5. RESTORE + BUILD
-    # -------------------------------------------------
+    # --- Restore + Build ---
     - name: Restore
       run: dotnet restore
 
-    - name: Build Release
+    - name: Build
       run: dotnet build --configuration Release --no-restore
 
-    # -------------------------------------------------
-    # 6. RUN TESTS (UNIT + BDD) WITH COVERAGE
-    # -------------------------------------------------
-    - name: Run All Tests (Unit + BDD) With Built-In Coverage
+    # --- Run Unit + BDD Tests with Built-in Coverage ---
+    - name: Run ALL Tests (Unit + BDD)
       run: |
-        dotnet test --configuration Release \
-          --collect:"XPlat Code Coverage" \
-          --logger "trx;LogFileName=test_results.trx"
+        mkdir -p TestResults
 
-    # -------------------------------------------------
-    # 7. CONVERT COVERAGE TO COBERTURA
-    # -------------------------------------------------
-    - name: Convert Coverage to Cobertura XML
-      run: |
-        reportgenerator \
-          -reports:"**/coverage.cobertura.xml" \
-          -targetdir:"coverage" \
-          -reporttypes:Cobertura
+        dotnet test TestProject1.Unit.tests/TestProject1.Unit.tests.csproj \
+          --configuration Release \
+          --logger "trx;LogFileName=unit_results.trx" \
+          --results-directory TestResults \
+          --collect:"XPlat Code Coverage"
 
-    # -------------------------------------------------
-    # 8. UPLOAD ARTIFACTS
-    # -------------------------------------------------
-    - name: Upload Test Results
+        dotnet test BPCalculator.BDDTests/BPCalculator.BDDTests.csproj \
+          --configuration Release \
+          --logger "trx;LogFileName=bdd_results.trx" \
+          --results-directory TestResults \
+          --collect:"XPlat Code Coverage"
+
+    - name: Upload Test Results + Coverage
       uses: actions/upload-artifact@v4
       with:
-        name: test-results
-        path: TestResults/**/*.trx
+        name: test-and-coverage
+        path: TestResults
 
-    - name: Upload Coverage Report (Cobertura XML)
-      uses: actions/upload-artifact@v4
-      with:
-        name: coverage-report
-        path: coverage/Cobertura.xml
-
-    # -------------------------------------------------
-    # 9. SONAR END
-    # -------------------------------------------------
-    - name: SonarCloud - End
+    # --- Sonar End ---
+    - name: SonarCloud End
       env:
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
       run: dotnet-sonarscanner end /d:sonar.login="${{ secrets.SONAR_TOKEN }}"
