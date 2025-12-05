@@ -3,7 +3,7 @@ name: Local CI Pipeline - Build, Test, and SonarCloud Scan
 on:
   push:
     branches:
-      - main    # Trigger only on pushes to the main branch
+      - main   # Trigger only on pushes to the main branch
   workflow_dispatch:   # Allows manual triggering of the workflow
 
 jobs:
@@ -30,7 +30,7 @@ jobs:
       - name: Build the project
         run: dotnet build --configuration Release
 
-      # Step 5: Run Unit Tests with Code Coverage
+      # Step 5: Run Unit Tests with Code Coverage (Built-in XPlat)
       - name: Run Unit Tests with Coverage
         run: |
           mkdir -p TestResults
@@ -44,19 +44,19 @@ jobs:
             -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=opencover \
             --verbosity normal
 
-      # Step 6: Upload Test Results
+      # Step 6: Upload Test Results (FIXED PATH)
       - name: Upload Test Results
         uses: actions/upload-artifact@v4
         with:
           name: test-results
-          path: TestResults/test_results.trx
+          path: TestResults/**/*.trx
 
-      # Step 7: Upload Code Coverage
+      # Step 7: Upload Code Coverage (FIXED PATH)
       - name: Upload Code Coverage
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
-          path: TestResults/coverage.opencover.xml
+          path: TestResults/**/*.xml
 
   sonar:
     name: SonarCloud Analysis
@@ -68,14 +68,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Step 2: Set up Java (required for SonarScanner)
+      # Step 2: Set up Java (required for SonarCloud)
       - name: Set up Java (SonarScanner)
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      # Step 3: SonarCloud Scan
+      # Step 3: SonarCloud Scan (FIXED COVERAGE PATHS)
       - name: SonarCloud Scan
         uses: sonarsource/sonarqube-scan-action@v5
         env:
@@ -85,5 +85,5 @@ jobs:
           args: >
             -Dsonar.organization=${{ secrets.SONAR_ORG }}
             -Dsonar.projectKey=${{ secrets.SONAR_PROJECT }}
-            -Dsonar.cs.opencover.reportsPaths=TestResults/**/coverage.opencover.xml
-            -Dsonar.cs.vstest.reportsPaths=TestResults/**/test_results.trx
+            -Dsonar.cs.opencover.reportsPaths=TestResults/**/*.xml
+            -Dsonar.cs.vstest.reportsPaths=TestResults/**/*.trx
