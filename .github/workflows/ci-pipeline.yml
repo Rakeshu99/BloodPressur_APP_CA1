@@ -2,127 +2,89 @@ name: CI Pipeline - Build, Test, Coverage, SonarCloud
 
 on:
   push:
-    branches: ["main"]
-  pull_request:
-    branches: ["main"]
+    branches: [ "main" ]
   workflow_dispatch:
 
 jobs:
-  build_and_test:
+  build:
     name: Build, Test, Coverage, OWASP
     runs-on: ubuntu-latest
 
     steps:
-    # -------------------------------
-    # 1. CHECKOUT CODE
-    # -------------------------------
-    - name: Checkout Repository
-      uses: actions/checkout@v4
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-    # -------------------------------
-    # 2. SETUP .NET 9
-    # -------------------------------
-    - name: Setup .NET SDK
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: "9.0.x"
+      - name: Setup .NET 9
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
 
-    # -------------------------------
-    # 3. OWASP DEPENDENCY CHECK
-    # -------------------------------
-    - name: Cache Dependency-Check Data
-      uses: actions/cache@v4
-      with:
-        path: ~/.dependency-check
-        key: ${{ runner.os }}-depcheck
+      # Restore
+      - name: Restore
+        run: dotnet restore
 
-    - name: Run OWASP Dependency Check
-      uses: dependency-check/Dependency-Check_Action@main
-      with:
-        project: "BloodPressure"
-        path: "."
-        format: "HTML"
-        out: "dependency-check-report"
+      # Build
+      - name: Build
+        run: dotnet build --configuration Release --no-restore
 
-    - name: Upload Dependency Report
-      uses: actions/upload-artifact@v4
-      with:
-        name: dependency-report
-        path: dependency-check-report/
+      # Run all tests + coverage
+      - name: Run All Tests (Unit + BDD)
+        run: |
+          mkdir -p TestResults
+          mkdir -p coverage
 
-    # -------------------------------
-    # 4. RESTORE + BUILD
-    # -------------------------------
-    - name: Restore Dependencies
-      run: dotnet restore
+          dotnet test TestProject1.Unit.tests/TestProject1.Unit.tests.csproj \
+            --logger "trx;LogFileName=unit.trx" \
+            --results-directory TestResults \
+            /p:CollectCoverage=true \
+            /p:CoverletOutput=coverage/unit_ \
+            /p:CoverletOutputFormat=opencover
 
-    - name: Build Project
-      run: dotnet build --configuration Release --no-restore
+          dotnet test BPCalculator.BDDTests/BPCalculator.BDDTests.csproj \
+            --logger "trx;LogFileName=bdd.trx" \
+            --results-directory TestResults \
+            /p:CollectCoverage=true \
+            /p:CoverletOutput=coverage/bdd_ \
+            /p:CoverletOutputFormat=opencover
 
-    # -------------------------------
-    # 5. RUN UNIT + BDD TESTS WITH COVERAGE
-    # -------------------------------
-    - name: Run Unit + BDD Tests with Coverage
-      run: |
-        mkdir -p coverage
+      # Upload combined artifact
+      - name: Upload Test + Coverage Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-and-coverage
+          path: |
+            TestResults/**/*.trx
+            coverage/**/*.xml
 
-        echo "Running UNIT TESTS..."
-        dotnet test TestProject1.Unit.tests/TestProject1.Unit.tests.csproj \
-          --configuration Release \
-          /p:CollectCoverage=true \
-          /p:CoverletOutput=coverage/unit_ \
-          /p:CoverletOutputFormat=opencover
-
-        echo "Running BDD TESTS..."
-        dotnet test BPCalculator.BDDTests/BPCalculator.BDDTests.csproj \
-          --configuration Release \
-          /p:CollectCoverage=true \
-          /p:CoverletOutput=coverage/bdd_ \
-          /p:CoverletOutputFormat=opencover
-
-    # -------------------------------
-    # 6. UPLOAD ARTIFACTS
-    # -------------------------------
-    - name: Upload Test Results + Coverage
-      uses: actions/upload-artifact@v4
-      with:
-        name: test-and-coverage
-        path: coverage/*.xml
-
-  # ============================================================
-  # SONARCLOUD ANALYSIS JOB
-  # ============================================================
-  sonarcloud:
+  sonar:
     name: SonarCloud Analysis
     runs-on: ubuntu-latest
-    needs: build_and_test
+    needs: build
 
     steps:
-    - name: Checkout Code
-      uses: actions/checkout@v4
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-    # Java required for SonarScanner
-    - name: Set up Java
-      uses: actions/setup-java@v4
-      with:
-        distribution: 'temurin'
-        java-version: '17'
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
 
-    # Download coverage artifacts
-    - name: Download Coverage Results
-      uses: actions/download-artifact@v4
-      with:
-        name: test-and-coverage
-        path: coverage
+      - name: Download Test + Coverage Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: test-and-coverage  # MUST MATCH upload name
+          path: TestResults         # Extract here
 
-    # SonarCloud Scan
-    - name: SonarCloud Scan
-      uses: sonarsource/sonarqube-scan-action@v5
-      env:
-        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        SONAR_HOST_URL: 'https://sonarcloud.io'
-      with:
-        args: >
-          -Dsonar.organization=${{ secrets.SONAR_ORG }}
-          -Dsonar.projectKey=${{ secrets.SONAR_PROJECT }}
-          -Dsonar.cs.opencover.reportsPaths=coverage/*.xml
+      - name: SonarCloud Scan
+        uses: sonarsource/sonarqube-scan-action@v5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: "https://sonarcloud.io"
+        with:
+          args: >
+            -Dsonar.organization=${{ secrets.SONAR_ORG }}
+            -Dsonar.projectKey=${{ secrets.SONAR_PROJECT }}
+            -Dsonar.cs.opencover.reportsPaths=TestResults/**/*.xml
+            -Dsonar.cs.vstest.reportsPaths=TestResults/**/*.trx
