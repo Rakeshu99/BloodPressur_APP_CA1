@@ -2,59 +2,60 @@ name: CI Pipeline - Build, Test, Coverage, SonarCloud
 
 on:
   push:
-    branches: [ "main" ]
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
   build:
-    name: Build, Test, Coverage, OWASP
+    name: Build, Test, and Coverage
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Code
+      # 1. Checkout
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup .NET 9
+      # 2. Setup .NET
+      - name: Setup .NET 9 SDK
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "9.0.x"
 
-      # Restore
-      - name: Restore
+      # 3. Restore
+      - name: Restore Packages
         run: dotnet restore
 
-      # Build
-      - name: Build
+      # 4. Build
+      - name: Build Solution
         run: dotnet build --configuration Release --no-restore
 
-      # Run all tests + coverage
-      - name: Run All Tests (Unit + BDD)
+      # 5. RUN UNIT + BDD TESTS (Both produce trx + coverage)
+      - name: Run All Tests with Coverage
         run: |
           mkdir -p TestResults
-          mkdir -p coverage
-
+          
+          echo "Running UNIT Tests..."
           dotnet test TestProject1.Unit.tests/TestProject1.Unit.tests.csproj \
+            --configuration Release \
             --logger "trx;LogFileName=unit.trx" \
-            --results-directory TestResults \
-            /p:CollectCoverage=true \
-            /p:CoverletOutput=coverage/unit_ \
-            /p:CoverletOutputFormat=opencover
+            --collect:"XPlat Code Coverage" \
+            --results-directory TestResults
 
+          echo "Running BDD Tests..."
           dotnet test BPCalculator.BDDTests/BPCalculator.BDDTests.csproj \
+            --configuration Release \
             --logger "trx;LogFileName=bdd.trx" \
-            --results-directory TestResults \
-            /p:CollectCoverage=true \
-            /p:CoverletOutput=coverage/bdd_ \
-            /p:CoverletOutputFormat=opencover
+            --collect:"XPlat Code Coverage" \
+            --results-directory TestResults
 
-      # Upload combined artifact
+      # 6. Upload ALL test + coverage results
       - name: Upload Test + Coverage Artifact
         uses: actions/upload-artifact@v4
         with:
           name: test-and-coverage
-          path: |
-            TestResults/**/*.trx
-            coverage/**/*.xml
+          path: TestResults/**/*
+          if-no-files-found: warn
 
   sonar:
     name: SonarCloud Analysis
@@ -62,21 +63,25 @@ jobs:
     needs: build
 
     steps:
+      # 1. Checkout
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      # 2. Download test results + coverage
+      - name: Download Coverage Results
+        uses: actions/download-artifact@v4
+        with:
+          name: test-and-coverage
+          path: TestResults
+
+      # 3. Setup Java for Sonar
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
-          java-version: '17'
+          distribution: temurin
+          java-version: "17"
 
-      - name: Download Test + Coverage Artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: test-and-coverage  # MUST MATCH upload name
-          path: TestResults         # Extract here
-
+      # 4. SonarCloud Scan
       - name: SonarCloud Scan
         uses: sonarsource/sonarqube-scan-action@v5
         env:
@@ -86,5 +91,5 @@ jobs:
           args: >
             -Dsonar.organization=${{ secrets.SONAR_ORG }}
             -Dsonar.projectKey=${{ secrets.SONAR_PROJECT }}
-            -Dsonar.cs.opencover.reportsPaths=TestResults/**/*.xml
             -Dsonar.cs.vstest.reportsPaths=TestResults/**/*.trx
+            -Dsonar.cs.opencover.reportsPaths=TestResults/**/*.xml
