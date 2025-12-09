@@ -125,5 +125,15 @@ namespace BPCalculator.Tests
             var bp = new BloodPressure(sys, dia);
             Assert.Equal(expected, bp.Category);
         }
+        [Theory]
+        [InlineData(120, 80, 40)]
+        [InlineData(150, 90, 60)]
+        [InlineData(100, 70, 30)]
+        [InlineData(140, 60, 80)]
+        public void PulsePressure_ComputesCorrectly(int sys, int dia, int expected)
+        {
+            var bp = new BloodPressure(sys, dia);
+            Assert.Equal(expected, bp.PulsePressure);
+        }
     }
 }
