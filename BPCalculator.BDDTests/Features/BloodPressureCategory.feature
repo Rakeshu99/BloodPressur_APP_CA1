@@ -1,4 +1,4 @@
-Feature: Blood Pressure Category
+﻿Feature: Blood Pressure Category
   In order to understand my blood pressure
   As a patient
   I want to see the category for my systolic and diastolic values
@@ -28,3 +28,10 @@ Feature: Blood Pressure Category
       | 200      | 90        |   # systolic out of range
       | 120      | 30        |   # diastolic out of range
       | 100      | 100       |   # systolic <= diastolic
+
+  # ⭐ NEW FEATURE SCENARIO: Pulse Pressure
+  Scenario: Calculating pulse pressure
+    Given I enter a systolic value of 120
+    And I enter a diastolic value of 80
+    When I calculate the blood pressure category
+    Then the pulse pressure should be 40
