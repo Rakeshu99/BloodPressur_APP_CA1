@@ -17,10 +17,7 @@ namespace BPCalculator.BDDTests.Features
     
     [global::System.CodeDom.Compiler.GeneratedCodeAttribute("Reqnroll", "3.0.0.0")]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
-    [global::NUnit.Framework.TestFixtureAttribute()]
-    [global::NUnit.Framework.DescriptionAttribute("Blood Pressure Category")]
-    [global::NUnit.Framework.FixtureLifeCycleAttribute(global::NUnit.Framework.LifeCycle.InstancePerTestCase)]
-    public partial class BloodPressureCategoryFeature
+    public partial class BloodPressureCategoryFeature : object, global::Xunit.IClassFixture<BloodPressureCategoryFeature.FixtureData>, global::Xunit.IAsyncLifetime
     {
         
         private global::Reqnroll.ITestRunner testRunner;
@@ -30,21 +27,25 @@ namespace BPCalculator.BDDTests.Features
         private static global::Reqnroll.FeatureInfo featureInfo = new global::Reqnroll.FeatureInfo(new global::System.Globalization.CultureInfo("en-US"), "Features", "Blood Pressure Category", "  In order to understand my blood pressure\r\n  As a patient\r\n  I want to see the c" +
                 "ategory for my systolic and diastolic values", global::Reqnroll.ProgrammingLanguage.CSharp, featureTags, InitializeCucumberMessages());
         
+        private global::Xunit.Abstractions.ITestOutputHelper _testOutputHelper;
+        
 #line 1 "BloodPressureCategory.feature"
 #line hidden
         
-        [global::NUnit.Framework.OneTimeSetUpAttribute()]
+        public BloodPressureCategoryFeature(BloodPressureCategoryFeature.FixtureData fixtureData, global::Xunit.Abstractions.ITestOutputHelper testOutputHelper)
+        {
+            this._testOutputHelper = testOutputHelper;
+        }
+        
         public static async global::System.Threading.Tasks.Task FeatureSetupAsync()
         {
         }
         
-        [global::NUnit.Framework.OneTimeTearDownAttribute()]
         public static async global::System.Threading.Tasks.Task FeatureTearDownAsync()
         {
             await global::Reqnroll.TestRunnerManager.ReleaseFeatureAsync(featureInfo);
         }
         
-        [global::NUnit.Framework.SetUpAttribute()]
         public async global::System.Threading.Tasks.Task TestInitializeAsync()
         {
             testRunner = global::Reqnroll.TestRunnerManager.GetTestRunnerForAssembly(featureHint: featureInfo);
@@ -70,7 +71,6 @@ namespace BPCalculator.BDDTests.Features
             }
         }
         
-        [global::NUnit.Framework.TearDownAttribute()]
         public async global::System.Threading.Tasks.Task TestTearDownAsync()
         {
             if ((testRunner == null))
@@ -91,7 +91,7 @@ namespace BPCalculator.BDDTests.Features
         public void ScenarioInitialize(global::Reqnroll.ScenarioInfo scenarioInfo, global::Reqnroll.RuleInfo ruleInfo)
         {
             testRunner.OnScenarioInitialize(scenarioInfo, ruleInfo);
-            testRunner.ScenarioContext.ScenarioContainer.RegisterInstanceAs<global::NUnit.Framework.TestContext>(global::NUnit.Framework.TestContext.CurrentContext);
+            testRunner.ScenarioContext.ScenarioContainer.RegisterInstanceAs<global::Xunit.Abstractions.ITestOutputHelper>(_testOutputHelper);
         }
         
         public async global::System.Threading.Tasks.Task ScenarioStartAsync()
@@ -109,12 +109,38 @@ namespace BPCalculator.BDDTests.Features
             return new global::Reqnroll.Formatters.RuntimeSupport.FeatureLevelCucumberMessages("Features/BloodPressureCategory.feature.ndjson", 10);
         }
         
-        [global::NUnit.Framework.TestAttribute()]
-        [global::NUnit.Framework.DescriptionAttribute("Classifying valid blood pressure readings")]
-        [global::NUnit.Framework.TestCaseAttribute("150", "95", "High", "0", null)]
-        [global::NUnit.Framework.TestCaseAttribute("130", "85", "PreHigh", "1", null)]
-        [global::NUnit.Framework.TestCaseAttribute("110", "70", "Ideal", "2", null)]
-        [global::NUnit.Framework.TestCaseAttribute("80", "55", "Low", "3", null)]
+        async global::System.Threading.Tasks.Task global::Xunit.IAsyncLifetime.InitializeAsync()
+        {
+            try
+            {
+                await this.TestInitializeAsync();
+            }
+            catch (System.Exception e1)
+            {
+                try
+                {
+                    ((global::Xunit.IAsyncLifetime)(this)).DisposeAsync();
+                }
+                catch (System.Exception e2)
+                {
+                    throw new System.AggregateException("Test initialization failed", e1, e2);
+                }
+                throw;
+            }
+        }
+        
+        async global::System.Threading.Tasks.Task global::Xunit.IAsyncLifetime.DisposeAsync()
+        {
+            await this.TestTearDownAsync();
+        }
+        
+        [global::Xunit.SkippableTheoryAttribute(DisplayName="Classifying valid blood pressure readings")]
+        [global::Xunit.TraitAttribute("FeatureTitle", "Blood Pressure Category")]
+        [global::Xunit.TraitAttribute("Description", "Classifying valid blood pressure readings")]
+        [global::Xunit.InlineDataAttribute("150", "95", "High", "0", new string[0])]
+        [global::Xunit.InlineDataAttribute("130", "85", "PreHigh", "1", new string[0])]
+        [global::Xunit.InlineDataAttribute("110", "70", "Ideal", "2", new string[0])]
+        [global::Xunit.InlineDataAttribute("80", "55", "Low", "3", new string[0])]
         public async global::System.Threading.Tasks.Task ClassifyingValidBloodPressureReadings(string systolic, string diastolic, string expectedCategory, string @__pickleIndex, string[] exampleTags)
         {
             string[] tagsOfScenario = exampleTags;
@@ -152,12 +178,13 @@ namespace BPCalculator.BDDTests.Features
             await this.ScenarioCleanupAsync();
         }
         
-        [global::NUnit.Framework.TestAttribute()]
-        [global::NUnit.Framework.DescriptionAttribute("Handling invalid readings")]
-        [global::NUnit.Framework.TestCaseAttribute("60", "50", "4", null)]
-        [global::NUnit.Framework.TestCaseAttribute("200", "90", "5", null)]
-        [global::NUnit.Framework.TestCaseAttribute("120", "30", "6", null)]
-        [global::NUnit.Framework.TestCaseAttribute("100", "100", "7", null)]
+        [global::Xunit.SkippableTheoryAttribute(DisplayName="Handling invalid readings")]
+        [global::Xunit.TraitAttribute("FeatureTitle", "Blood Pressure Category")]
+        [global::Xunit.TraitAttribute("Description", "Handling invalid readings")]
+        [global::Xunit.InlineDataAttribute("60", "50", "4", new string[0])]
+        [global::Xunit.InlineDataAttribute("200", "90", "5", new string[0])]
+        [global::Xunit.InlineDataAttribute("120", "30", "6", new string[0])]
+        [global::Xunit.InlineDataAttribute("100", "100", "7", new string[0])]
         public async global::System.Threading.Tasks.Task HandlingInvalidReadings(string systolic, string diastolic, string @__pickleIndex, string[] exampleTags)
         {
             string[] tagsOfScenario = exampleTags;
@@ -192,6 +219,22 @@ namespace BPCalculator.BDDTests.Features
 #line hidden
             }
             await this.ScenarioCleanupAsync();
+        }
+        
+        [global::System.CodeDom.Compiler.GeneratedCodeAttribute("Reqnroll", "3.0.0.0")]
+        [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
+        public class FixtureData : object, global::Xunit.IAsyncLifetime
+        {
+            
+            async global::System.Threading.Tasks.Task global::Xunit.IAsyncLifetime.InitializeAsync()
+            {
+                await BloodPressureCategoryFeature.FeatureSetupAsync();
+            }
+            
+            async global::System.Threading.Tasks.Task global::Xunit.IAsyncLifetime.DisposeAsync()
+            {
+                await BloodPressureCategoryFeature.FeatureTearDownAsync();
+            }
         }
     }
 }
