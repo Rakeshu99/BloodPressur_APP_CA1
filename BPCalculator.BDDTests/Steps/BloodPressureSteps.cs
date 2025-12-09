@@ -63,7 +63,6 @@ namespace BPCalculator.BDDTests.Steps
         {
             Assert.NotNull(_caughtException);
         }
-
         [Then(@"the pulse pressure should be (.*)")]
         public void ThenThePulsePressureShouldBe(int expected)
         {
