@@ -1,0 +1,88 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: ["master", "develop"]
+  pull_request:
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Cache Dependency-Check data
+      uses: actions/cache@v4
+      with:
+        path: ~/.dependency-check
+        key: ${{ runner.os }}-dependency-check
+        restore-keys: |
+         ${{ runner.os }}-dependency-check
+ 
+    - name: Run OWASP Dependency-Check
+      uses: dependency-check/Dependency-Check_Action@main
+      with:
+        project: "bp"
+        path: "."
+        format: "HTML"
+        out: "dependency-check-report"
+ 
+    - name: Upload Dependency-Check report
+      uses: actions/upload-artifact@v4
+      with:
+        name: dependency-check-report
+        path: dependency-check-report
+
+    - name: Setup .NET 9
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: "9.0.x"
+
+    - name: Install SonarScanner for .NET
+      run: dotnet tool install --global dotnet-sonarscanner
+
+    - name: SonarCloud - Begin Analysis
+      env:
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      run: |
+        dotnet-sonarscanner begin \
+          /k:"A00046304_BPCalculator" \
+          /o:"a00046304" \
+          /d:sonar.host.url="https://sonarcloud.io" \
+          /d:sonar.login="${{ secrets.SONAR_TOKEN }}" \
+          /d:sonar.cs.opencover.reportsPaths="coverage/*.opencover.xml"
+
+    - name: Restore
+      run: dotnet restore
+
+    - name: Build
+      run: dotnet build --configuration Release
+
+    - name: Run Tests with OpenCover Coverage
+      run: |
+        mkdir -p coverage
+        
+        echo "Running UNIT TESTS..."
+        dotnet test BPCalculator.Tests/BPCalculator.Tests.csproj --configuration Release \
+            /p:CollectCoverage=true \
+            /p:CoverletOutput=$(pwd)/coverage/unit.opencover.xml \
+            /p:CoverletOutputFormat=opencover
+
+        echo "Running BDD TESTS..."
+        dotnet test BPCalculator.BDDTests/BPCalculator.BDDTests.csproj --configuration Release \
+            /p:CollectCoverage=true \
+            /p:CoverletOutput=$(pwd)/coverage/bdd.opencover.xml \
+            /p:CoverletOutputFormat=opencover
+
+    - name: Upload Coverage Report
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-report
+        path: coverage/*.opencover.xml
+
+    - name: SonarCloud - End Analysis
+      env:
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      run: dotnet-sonarscanner end /d:sonar.login="${{ secrets.SONAR_TOKEN }}"
