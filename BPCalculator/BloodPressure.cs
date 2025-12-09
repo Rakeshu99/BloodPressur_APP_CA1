@@ -60,5 +60,14 @@ namespace BPCalculator
                 return BPCategory.Low;
             }
         }
+
+        // ⭐ NEW FEATURE 
+        public int PulsePressure
+        {
+            get
+            {
+                return Systolic - Diastolic;
+            }
+        }
     }
 }

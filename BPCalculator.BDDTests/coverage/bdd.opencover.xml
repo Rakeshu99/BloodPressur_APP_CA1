@@ -2,9 +2,9 @@
 <CoverageSession>
   <Summary numSequencePoints="94" visitedSequencePoints="19" numBranchPoints="50" visitedBranchPoints="21" sequenceCoverage="20.21" branchCoverage="42" maxCyclomaticComplexity="69" minCyclomaticComplexity="69" visitedClasses="1" numClasses="12" visitedMethods="5" numMethods="27" />
   <Modules>
-    <Module hash="8DE89216-BB42-4308-B8E6-1B6F6008BFC0">
+    <Module hash="19E32C92-4947-4706-937D-EAC39CFB03EE">
       <ModulePath>BPCalculator.dll</ModulePath>
-      <ModuleTime>2025-12-09T09.51.30</ModuleTime>
+      <ModuleTime>2025-12-09T11.37.11</ModuleTime>
       <ModuleName>BPCalculator</ModuleName>
       <Files>
         <File uid="1" fullPath="C:\Users\Rakesh\Documents\GaryAssessment\working-ci-bp-master\BPCalculator\BloodPressure.cs" />

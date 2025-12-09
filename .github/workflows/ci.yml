@@ -52,7 +52,9 @@ jobs:
           /o:"${{ secrets.SONAR_ORG }}" \
           /d:sonar.host.url="https://sonarcloud.io" \
           /d:sonar.login="${{ secrets.SONAR_TOKEN }}" \
-          /d:sonar.cs.opencover.reportsPaths="coverage/*.opencover.xml"
+          /d:sonar.cs.opencover.reportsPaths="coverage/*.opencover.xml" \
+          /d:sonar.inclusions="BPCalculator/BloodPressure.cs" \
+          /d:sonar.exclusions="**/*.cshtml, **/Program.cs, **/Startup.cs, **/Views/**, **/wwwroot/**"
 
     - name: Restore
       run: dotnet restore
