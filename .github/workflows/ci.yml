@@ -1,4 +1,4 @@
-name: CI Pipeline
+﻿name: CI Pipeline
 
 on:
   push:
@@ -19,7 +19,7 @@ jobs:
         path: ~/.dependency-check
         key: ${{ runner.os }}-dependency-check
         restore-keys: |
-         ${{ runner.os }}-dependency-check
+          ${{ runner.os }}-dependency-check
  
     - name: Run OWASP Dependency-Check
       uses: dependency-check/Dependency-Check_Action@main
@@ -83,6 +83,19 @@ jobs:
       with:
         name: coverage-report
         path: coverage/*.opencover.xml
+
+
+    # ⭐⭐⭐⭐⭐ NEW REQUIRED STEPS FOR CD — MUST BE BELOW TESTS ⭐⭐⭐⭐⭐
+    - name: Publish Web App for CD
+      run: dotnet publish BPCalculator/BPCalculator.csproj -c Release -o publish
+
+    - name: Upload build artifact for CD
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-output
+        path: publish
+    # ⭐⭐⭐⭐⭐ END NEW STEPS ⭐⭐⭐⭐⭐
+
 
     - name: SonarCloud - End Analysis
       env:
