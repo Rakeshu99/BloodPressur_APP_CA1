@@ -1,103 +1,158 @@
-name: CD Pipeline
+﻿name: CD Pipeline
 
 on:
   push:
     branches:
-      - dev
-      - qa
-      - main
+      - dev          # When code merges into dev → start CD
+  workflow_dispatch:
 
 jobs:
-  deploy-dev:
-    if: github.ref == 'refs/heads/dev'
+
+  # ============================================================
+  # 1) DEPLOY TO DEV SLOT
+  # ============================================================
+  deploy_dev:
+    name: Deploy to DEV Slot
     runs-on: ubuntu-latest
-    environment: dev
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+    - name: Checkout Repo
+      uses: actions/checkout@v4
 
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '9.0.x'
+    - name: Setup .NET 9
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: "9.0.x"
 
-      - name: Restore
-        run: dotnet restore
+    - name: Publish project
+      run: dotnet publish BPCalculator/BPCalculator.csproj -c Release -o publish
 
-      - name: Build
-        run: dotnet build --configuration Release --no-restore
+    - name: Deploy to Azure (DEV slot)
+      uses: azure/webapps-deploy@v3
+      with:
+        app-name: ${{ secrets.AZURE_WEBAPP_NAME }}
+        slot-name: "dev"
+        publish-profile: ${{ secrets.AZURE_WEBAPP_PUB_DEV }}
+        package: ./publish
 
-      - name: Publish web app
-        run: dotnet publish BPCalculator/BPCalculator.csproj -c Release -o ./publish
-
-      - name: Deploy to Azure Web App (Dev slot)
-        uses: azure/webapps-deploy@v2
-        with:
-          app-name: 'bp-app-rakesh'
-          slot-name: 'dev'
-          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE_DEV }}
-          package: './publish'
-
-  deploy-qa:
-    if: github.ref == 'refs/heads/qa'
+  # ============================================================
+  # 2) E2E SELENIUM TESTS ON DEV
+  # ============================================================
+  e2e_tests_dev:
+    name: Run E2E Tests on DEV
+    needs: deploy_dev
     runs-on: ubuntu-latest
-    environment: qa
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+    - uses: actions/checkout@v4
 
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '9.0.x'
+    - name: Install Chrome
+      uses: browser-actions/setup-chrome@latest
 
-      - name: Restore
-        run: dotnet restore
+    - name: Install .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: "9.0.x"
 
-      - name: Build
-        run: dotnet build --configuration Release --no-restore
+    - name: Run Selenium E2E tests
+      env:
+        BASE_URL: "https://bp-app-rakesh-dev.francecentral-01.azurewebsites.net"
+      run: |
+        cd BPCalculator.E2E
+        dotnet test --logger "trx"
 
-      - name: Publish web app
-        run: dotnet publish BPCalculator/BPCalculator.csproj -c Release -o ./publish
-
-      - name: Deploy to Azure Web App (QA slot)
-        uses: azure/webapps-deploy@v2
-        with:
-          app-name: 'bp-app-rakesh'
-          slot-name: 'qa'
-          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE_QA }}
-          package: './publish'
-
-  deploy-prod:
-    if: github.ref == 'refs/heads/main'
+  # ============================================================
+  # 3) DEPLOY TO QA SLOT
+  # ============================================================
+  deploy_qa:
+    name: Deploy to QA Slot
     runs-on: ubuntu-latest
-    environment: prod
+    needs: e2e_tests_dev   # Only deploy if E2E passed
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+    - uses: actions/checkout@v4
 
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '9.0.x'
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: "9.0.x"
 
-      - name: Restore
-        run: dotnet restore
+    - name: Publish project
+      run: dotnet publish BPCalculator/BPCalculator.csproj -c Release -o publish
 
-      - name: Build
-        run: dotnet build --configuration Release --no-restore
+    - name: Deploy to Azure (QA slot)
+      uses: azure/webapps-deploy@v3
+      with:
+        app-name: ${{ secrets.AZURE_WEBAPP_NAME }}
+        slot-name: "qa"
+        publish-profile: ${{ secrets.AZURE_WEBAPP_PUB_QA }}
+        package: ./publish
 
-      - name: Publish web app
-        run: dotnet publish BPCalculator/BPCalculator.csproj -c Release -o ./publish
+  # ============================================================
+  # 4) PERFORMANCE TESTING ON QA
+  # ============================================================
+  performance_test:
+    name: Performance Load Test on QA
+    needs: deploy_qa
+    runs-on: ubuntu-latest
 
-      - name: Deploy to Azure Web App (Production)
-        uses: azure/webapps-deploy@v2
-        with:
-          app-name: 'bp-app-rakesh'
-          # no slot-name => production
-          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE_PROD }}
-          package: './publish'
-          
+    steps:
+    - name: Run simple load test
+      run: |
+        echo "Running performance test..."
+        siege -t10S -c10 https://bp-app-rakesh-qa.francecentral-01.azurewebsites.net
+
+  # ============================================================
+  # 5) MANUAL APPROVAL FOR PROD
+  # ============================================================
+  approval_gate:
+    name: Manual Approval Required
+    needs: performance_test
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Wait for approval
+      uses: trstringer/manual-approval@v1
+      with:
+        approvers: your-github-username
+        minimum-approvals: 1
+
+  # ============================================================
+  # 6) DEPLOY TO PROD
+  # ============================================================
+  deploy_prod:
+    name: Deploy to Production
+    needs: approval_gate
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: "9.0.x"
+
+    - name: Publish project
+      run: dotnet publish BPCalculator/BPCalculator.csproj -c Release -o publish
+
+    - name: Deploy to Azure Production
+      uses: azure/webapps-deploy@v3
+      with:
+        app-name: ${{ secrets.AZURE_WEBAPP_NAME }}
+        publish-profile: ${{ secrets.AZURE_WEBAPP_PUB_PROD }}
+        package: ./publish
+
+  # ============================================================
+  # 7) SMOKE TEST ON PROD
+  # ============================================================
+  prod_smoke_test:
+    name: Smoke Test Production
+    needs: deploy_prod
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Validate Homepage
+      run: |
+        STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://bp-app-rakesh.francecentral-01.azurewebsites.net)
+        if [ "$STATUS" != "200" ]; then exit 1; fi
