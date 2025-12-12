@@ -144,6 +144,16 @@ jobs:
   security_scan_qa:
     runs-on: ubuntu-latest
     needs: performance_test_qa
+
+    steps:
+      - name: Run OWASP ZAP Baseline Scan (non-blocking)
+        uses: zaproxy/action-baseline@v0.11.0
+        continue-on-error: true
+        with:
+          target: ${{ env.QA_URL }}
+          cmd_options: "-a -n"security_scan_qa:
+    runs-on: ubuntu-latest
+    needs: performance_test_qa
     continue-on-error: true
 
     steps:
