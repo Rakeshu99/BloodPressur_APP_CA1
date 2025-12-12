@@ -1,0 +1,52 @@
+﻿name: CD Pipeline
+ 
+ 
+on:
+  # Run CD after CI finishes
+  workflow_run:
+    workflows: ["CI Pipeline"]     
+    types:
+      - completed
+ 
+env:
+ 
+  QA_URL: https://bp-app-rakesh-qa-ametd7agehcscgae.francecentral-01.azurewebsites.net"
+  STAGING_SLOT_URL: "https://bp-app-rakesh-dev-djbbevbydxd0h2ds.francecentral-01.azurewebsites.net"
+  PROD_URL: "https://bp-app-rakesh-f4g6e2adb3h9e9cg.francecentral-01.azurewebsites.net"
+ 
+  # 1. BUILD — executed once
+ 
+jobs:
+  # 1. DEPLOY TO QA
+  deploy_qa:
+    runs-on: ubuntu-latest
+    # Only when CI succeeded AND branch is master
+    if: |
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main'
+    environment: dev
+ 
+    steps:
+      - name: Checkout repo (for tests/scripts only)
+        uses: actions/checkout@v4
+ 
+      # Download artifact from the CI workflow run
+      - name: Download build-output artifact from CI
+        uses: actions/download-artifact@v4
+        with:
+         name: build-output                 
+         path: publish                       
+         run-id: ${{ github.event.workflow_run.id }}
+         github-token: ${{ secrets.GITHUB_TOKEN }}
+ 
+ 
+      - name: Deploy to DEV Web App
+        uses: azure/webapps-deploy@122b7ec46017e53a3f71e3a027d67550a1641f5e
+        with:
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE_DEV }}
+          package: publish
+ 
+      - name: Setup .NET 9
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
