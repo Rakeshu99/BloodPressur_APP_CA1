@@ -10,11 +10,16 @@ env:
   DEV_URL: "https://bp-app-rakesh-dev-djbbevbydxd0h2ds.francecentral-01.azurewebsites.net"
 
 jobs:
+<<<<<<< HEAD
 
   # ============================================================
   # PHASE 1 – DEPLOY TO DEV (UNCHANGED, WORKING)
   # ============================================================
   deploy_dev:
+=======
+  # 1. DEPLOY TO DEV
+  deploy_qa:
+>>>>>>> ba6b93daf813598808de3e601460b51398e35422
     runs-on: ubuntu-latest
     if: |
       github.event.workflow_run.conclusion == 'success' &&
@@ -54,6 +59,7 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "9.0.x"
+<<<<<<< HEAD
 
       - name: Install Chrome
         uses: browser-actions/setup-chrome@latest
@@ -86,3 +92,5 @@ jobs:
         with:
           name: selenium-e2e-report
           path: TestResults/
+=======
+>>>>>>> ba6b93daf813598808de3e601460b51398e35422
