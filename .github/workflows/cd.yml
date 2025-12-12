@@ -170,22 +170,9 @@ jobs:
             report_html.html
             report_md.md
             report_json.json
-
-
+            
 # ============================================================
-# PHASE 6 – MANUAL APPROVAL GATE
-# ============================================================
-  approval_gate:
-    runs-on: ubuntu-latest
-    needs: security_scan_qa
-    environment: prod
-    steps:
-      - name: Await manual approval
-        run: echo "Waiting for production approval..."
-
-
-# ============================================================
-# PHASE 7 – DEPLOY TO PROD SLOT (BLUE–GREEN)
+# PHASE 6 – DEPLOY TO PROD SLOT (BLUE–GREEN)
 # ============================================================
   deploy_prod:
     runs-on: ubuntu-latest
@@ -206,5 +193,5 @@ jobs:
       - name: Deploy to Production slot
         uses: azure/webapps-deploy@v3
         with:
-          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE_PROD }}
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
           package: publish
