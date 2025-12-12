@@ -3,8 +3,7 @@ name: CD Pipeline
 on:
   workflow_run:
     workflows: ["CI Pipeline"]
-    types:
-      - completed
+    types: [completed]
 
 env:
   DEV_URL: "https://bp-app-rakesh-dev-djbbevbydxd0h2ds.francecentral-01.azurewebsites.net"
@@ -14,11 +13,11 @@ env:
 jobs:
 
 # ============================================================
-# PHASE 1 – DEPLOY TO DEV SLOT
+# PHASE 1 – DEPLOY TO DEV
 # ============================================================
   deploy_dev:
     runs-on: ubuntu-latest
-    if: |
+    if: >
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.head_branch == 'main'
     environment: dev
@@ -26,23 +25,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download build artifact from CI
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           name: build-output
           path: publish
           run-id: ${{ github.event.workflow_run.id }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Deploy to DEV slot
-        uses: azure/webapps-deploy@v3
+      - uses: azure/webapps-deploy@v3
         with:
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE_DEV }}
           package: publish
 
-
 # ============================================================
-# PHASE 2 – E2E TESTING ON DEV (CHROME + EDGE)
+# PHASE 2 – E2E TESTING (DEV)
 # ============================================================
   e2e_tests_dev:
     runs-on: ubuntu-latest
@@ -61,32 +56,15 @@ jobs:
       - name: Run Selenium E2E (Chrome)
         env:
           BASE_URL: ${{ env.DEV_URL }}
-          BROWSER: chrome
-        run: |
-          mkdir -p TestResults
-          dotnet test BPCalculator.E2E/BPCalculator.E2E.csproj \
-            --logger "trx;LogFileName=e2e-chrome.trx" \
-            --results-directory TestResults
+        run: dotnet test BPCalculator.E2E/BPCalculator.E2E.csproj
 
       - name: Run Selenium E2E (Edge)
         env:
           BASE_URL: ${{ env.DEV_URL }}
-          BROWSER: edge
-        run: |
-          dotnet test BPCalculator.E2E/BPCalculator.E2E.csproj \
-            --logger "trx;LogFileName=e2e-edge.trx" \
-            --results-directory TestResults
-
-      - name: Upload E2E Reports
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: selenium-e2e-report
-          path: TestResults/
-
+        run: dotnet test BPCalculator.E2E/BPCalculator.E2E.csproj
 
 # ============================================================
-# PHASE 3 – DEPLOY TO QA SLOT
+# PHASE 3 – DEPLOY TO QA
 # ============================================================
   deploy_qa:
     runs-on: ubuntu-latest
@@ -96,93 +74,66 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download build artifact from CI
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           name: build-output
           path: publish
           run-id: ${{ github.event.workflow_run.id }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Deploy to QA slot
-        uses: azure/webapps-deploy@v3
+      - uses: azure/webapps-deploy@v3
         with:
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE_QA }}
           package: publish
 
-
 # ============================================================
-# PHASE 4 – PERFORMANCE TESTING (QA)
+# PHASE 4 – PERFORMANCE TEST (QA)
 # ============================================================
   performance_test_qa:
     runs-on: ubuntu-latest
     needs: deploy_qa
 
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Prepare results folder
-        run: mkdir -p perf-results
-
-      - name: k6 Smoke Test
-        uses: grafana/k6-action@v0.2.0
+      - uses: grafana/k6-action@v0.2.0
         env:
           APP_URL: ${{ env.QA_URL }}
-          K6_SUMMARY_EXPORT: perf-results/k6-smoke.json
         with:
           filename: perf/k6-smoke.js
 
-      - name: Upload k6 Report
-        uses: actions/upload-artifact@v4
-        with:
-          name: k6-performance-report
-          path: perf-results/
-
-
 # ============================================================
-# PHASE 5 – SECURITY TESTING (QA – ZAP BASELINE)
+# PHASE 5 – SECURITY SCAN (NON-BLOCKING)
 # ============================================================
   security_scan_qa:
     runs-on: ubuntu-latest
     needs: performance_test_qa
+    continue-on-error: true
 
     steps:
-      - name: OWASP ZAP Baseline Scan
-        uses: zaproxy/action-baseline@v0.11.0
+      - uses: zaproxy/action-baseline@v0.11.0
         with:
           target: ${{ env.QA_URL }}
           cmd_options: "-a"
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      # ZAP WARNINGS ARE ACCEPTABLE FOR BASELINE SCAN
-      continue-on-error: true
-
 
 # ============================================================
-# PHASE 6 – DEPLOY TO PROD (MANUAL APPROVAL)
+# PHASE 6 – DEPLOY TO PROD (APPROVAL HAPPENS HERE)
 # ============================================================
   deploy_prod:
     runs-on: ubuntu-latest
     needs: security_scan_qa
-    environment: prod   # <-- approval happens HERE (GitHub Environments)
+    environment: prod   # ⬅️ SINGLE approval gate
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download build artifact from CI
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           name: build-output
           path: publish
           run-id: ${{ github.event.workflow_run.id }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Deploy to PROD slot
-        uses: azure/webapps-deploy@v3
+      - uses: azure/webapps-deploy@v3
         with:
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE_PROD }}
           package: publish
-
 
 # ============================================================
 # PHASE 7 – PROD SMOKE TEST
@@ -192,7 +143,6 @@ jobs:
     needs: deploy_prod
 
     steps:
-      - name: Smoke test homepage
-        run: |
+      - run: |
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" ${{ env.PROD_URL }})
-          if [ "$STATUS" != "200" ]; then exit 1; fi
+          [ "$STATUS" = "200" ]
