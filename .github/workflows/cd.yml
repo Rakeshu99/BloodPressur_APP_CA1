@@ -123,6 +123,9 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
+      - name: Prepare performance results folder
+        run: mkdir -p perf-results
+
       - name: Run k6 Smoke Test on QA
         uses: grafana/k6-action@v0.2.0
         env:
@@ -142,15 +145,18 @@ jobs:
 # PHASE 5 – SECURITY SCAN (NON-BLOCKING)
 # ============================================================
   security_scan_qa:
-    runs-on: ubuntu-latest
-    needs: performance_test_qa
-    continue-on-error: true
+   runs-on: ubuntu-latest
+   needs: performance_test_qa
+   continue-on-error: true
 
-    steps:
-      - uses: zaproxy/action-baseline@v0.11.0
-        with:
-          target: ${{ env.QA_URL }}
-          cmd_options: "-a"
+   steps:
+    - name: OWASP ZAP baseline scan (non-blocking)
+      uses: zaproxy/action-baseline@v0.11.0
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        target: ${{ env.QA_URL }}
+        cmd_options: "-a"
+        artifact_name: "zap-scan-report"
 
 # ============================================================
 # PHASE 6 – DEPLOY TO PROD (APPROVAL HAPPENS HERE)
@@ -161,18 +167,22 @@ jobs:
     environment: prod   # ⬅️ SINGLE approval gate
 
     steps:
-      - uses: actions/checkout@v4
+    - name: Checkout repo
+      uses: actions/checkout@v4
 
-      - uses: actions/download-artifact@v4
-        with:
-          name: build-output
-          path: publish
-          run-id: ${{ github.event.workflow_run.id }}
+    - name: Download build artifact from CI
+      uses: actions/download-artifact@v4
+      with:
+        name: build-output
+        path: publish
+        run-id: ${{ github.event.workflow_run.id }}
+        github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: azure/webapps-deploy@v3
-        with:
-          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
-          package: publish
+    - name: Deploy to PROD Web App
+      uses: azure/webapps-deploy@v3
+      with:
+        publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+        package: publish
 
 # ============================================================
 # PHASE 7 – PROD SMOKE TEST
