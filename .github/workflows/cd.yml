@@ -150,21 +150,30 @@ jobs:
    continue-on-error: true
 
    steps:
-    - name: Checkout
+    - name: Checkout repo
       uses: actions/checkout@v4
 
-    - name: Create writable temp folder for ZAP
-      run: mkdir -p zap-temp
+    - name: Run OWASP ZAP Baseline Scan (Docker)
+      run: |
+        docker run --user root \
+          -v "$(pwd)":/zap/wrk/:rw \
+          ghcr.io/zaproxy/zaproxy:stable \
+          zap-baseline.py \
+            -t "${{ env.QA_URL }}" \
+            -r zap-report.html \
+            -w zap-warnings.md \
+            -J zap-report.json \
+            -a
 
-    - name: OWASP ZAP baseline scan (non-blocking)
-      uses: zaproxy/action-baseline@v0.11.0
+    - name: Upload ZAP Reports
+      if: always()
+      uses: actions/upload-artifact@v4
       with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        target: ${{ env.QA_URL }}
-        cmd_options: "-a"
-        artifact_name: "zap-scan-report"
-        workdir: "zap-temp"  # FIX: prevents permission denied
-
+        name: zap-scan-report
+        path: |
+          zap-report.html
+          zap-warnings.md
+          zap-report.json
 # ============================================================
 # PHASE 6 – DEPLOY TO PROD (APPROVAL HAPPENS HERE)
 # ============================================================
