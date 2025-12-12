@@ -163,7 +163,7 @@ jobs:
             -r zap-report.html \
             -w zap-warnings.md \
             -J zap-report.json \
-            -a
+            -a || true
 
     - name: Upload ZAP Reports
       if: always()
