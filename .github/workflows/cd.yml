@@ -113,3 +113,29 @@ jobs:
         with:
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE_QA }}
           package: publish
+
+  # ============================================================
+  # PHASE 4 – PERFORMANCE TESTING ON QA (NEW)
+  # ============================================================
+  performance_test_qa:
+    runs-on: ubuntu-latest
+    needs: deploy_qa
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Run k6 Smoke Test on QA
+        uses: grafana/k6-action@v0.2.0
+        env:
+          APP_URL: ${{ env.QA_URL }}
+          K6_SUMMARY_EXPORT: perf-results/k6-summary.json
+        with:
+          filename: perf/k6-smoke.js
+
+      - name: Upload k6 Performance Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: k6-performance-report
+          path: perf-results/
