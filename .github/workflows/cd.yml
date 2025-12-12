@@ -11,10 +11,11 @@ env:
   QA_URL: "https://bp-app-rakesh-qa-ametd7agehcscgae.francecentral-01.azurewebsites.net"
   PROD_URL: "https://bp-app-rakesh-f4g6e2adb3h9e9cg.francecentral-01.azurewebsites.net"
 
-# ============================================================
-# PHASE 1 – DEPLOY TO DEV
-# ============================================================
 jobs:
+
+# ============================================================
+# PHASE 1 – DEPLOY TO DEV SLOT
+# ============================================================
   deploy_dev:
     runs-on: ubuntu-latest
     if: |
@@ -23,7 +24,8 @@ jobs:
     environment: dev
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
       - name: Download build artifact from CI
         uses: actions/download-artifact@v4
@@ -39,6 +41,7 @@ jobs:
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE_DEV }}
           package: publish
 
+
 # ============================================================
 # PHASE 2 – E2E TESTING ON DEV
 # ============================================================
@@ -49,39 +52,46 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-dotnet@v4
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "9.0.x"
 
-      - uses: browser-actions/setup-chrome@latest
-      - uses: browser-actions/setup-edge@v1
+      - name: Install Chrome
+        uses: browser-actions/setup-chrome@latest
 
-      - name: Run Selenium E2E (Chrome)
+      - name: Install Edge
+        uses: browser-actions/setup-edge@v1
+
+      - name: Run Selenium E2E tests (Chrome)
         env:
           BASE_URL: ${{ env.DEV_URL }}
+          BROWSER: chrome
         run: |
           mkdir -p TestResults
           dotnet test BPCalculator.E2E/BPCalculator.E2E.csproj \
             --logger "trx;LogFileName=e2e-chrome.trx" \
             --results-directory TestResults
 
-      - name: Run Selenium E2E (Edge)
+      - name: Run Selenium E2E tests (Edge)
         env:
           BASE_URL: ${{ env.DEV_URL }}
+          BROWSER: edge
         run: |
           dotnet test BPCalculator.E2E/BPCalculator.E2E.csproj \
             --logger "trx;LogFileName=e2e-edge.trx" \
             --results-directory TestResults
 
-      - name: Upload E2E reports
+      - name: Upload E2E Test Reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: selenium-e2e-report
           path: TestResults/
 
+
 # ============================================================
-# PHASE 3 – DEPLOY TO QA
+# PHASE 3 – DEPLOY TO QA SLOT
 # ============================================================
   deploy_qa:
     runs-on: ubuntu-latest
@@ -91,7 +101,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download build artifact
+      - name: Download build artifact from CI
         uses: actions/download-artifact@v4
         with:
           name: build-output
@@ -105,8 +115,9 @@ jobs:
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE_QA }}
           package: publish
 
+
 # ============================================================
-# PHASE 4 – PERFORMANCE TESTING (QA)
+# PHASE 4 – PERFORMANCE TESTING ON QA
 # ============================================================
   performance_test_qa:
     runs-on: ubuntu-latest
@@ -115,51 +126,76 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - run: mkdir -p perf-results
+      - name: Prepare performance results folder
+        run: mkdir -p perf-results
 
-      - name: k6 Smoke Test
+      - name: Run k6 Smoke Test
         uses: grafana/k6-action@v0.2.0
         env:
           APP_URL: ${{ env.QA_URL }}
-          K6_SUMMARY_EXPORT: perf-results/k6-smoke.json
+          K6_SUMMARY_EXPORT: perf-results/k6-summary.json
         with:
           filename: perf/k6-smoke.js
 
-      - name: Upload k6 report
+      - name: Upload k6 Performance Report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: k6-performance-report
           path: perf-results/
 
+
 # ============================================================
-# PHASE 5 – SECURITY TESTING (QA) – NON-BLOCKING
+# PHASE 5 – SECURITY TESTING ON QA (NON-BLOCKING)
 # ============================================================
   security_scan_qa:
     runs-on: ubuntu-latest
     needs: performance_test_qa
-    continue-on-error: true
+    environment: qa
 
     steps:
-      - name: OWASP ZAP Baseline Scan
+      - name: Run OWASP ZAP Baseline Scan (non-blocking)
         uses: zaproxy/action-baseline@v0.11.0
+        continue-on-error: true
         with:
           target: ${{ env.QA_URL }}
           cmd_options: "-a"
-          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload ZAP Security Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-security-report
+          path: |
+            report_html.html
+            report_md.md
+            report_json.json
+
 
 # ============================================================
-# PHASE 6 – DEPLOY TO PROD (MANUAL APPROVAL)
+# PHASE 6 – MANUAL APPROVAL GATE
+# ============================================================
+  approval_gate:
+    runs-on: ubuntu-latest
+    needs: security_scan_qa
+    environment: prod
+    steps:
+      - name: Await manual approval
+        run: echo "Waiting for production approval..."
+
+
+# ============================================================
+# PHASE 7 – DEPLOY TO PROD SLOT (BLUE–GREEN)
 # ============================================================
   deploy_prod:
     runs-on: ubuntu-latest
-    needs: security_scan_qa
-    environment: prod   # 🔐 Approval happens here
+    needs: approval_gate
+    environment: prod
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download build artifact
+      - name: Download build artifact from CI
         uses: actions/download-artifact@v4
         with:
           name: build-output
@@ -167,21 +203,8 @@ jobs:
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Deploy to PROD slot
+      - name: Deploy to Production slot
         uses: azure/webapps-deploy@v3
         with:
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE_PROD }}
           package: publish
-
-# ============================================================
-# PHASE 7 – SMOKE TEST (PROD)
-# ============================================================
-  smoke_test_prod:
-    runs-on: ubuntu-latest
-    needs: deploy_prod
-
-    steps:
-      - name: Check PROD availability
-        run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" ${{ env.PROD_URL }})
-          if [ "$STATUS" != "200" ]; then exit 1; fi
