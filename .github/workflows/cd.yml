@@ -12,59 +12,82 @@ env:
 
 jobs:
 
-# ============================================================
-# PHASE 1 – DEPLOY TO DEV
-# ============================================================
+ # ============================================================
+  # PHASE 1 – DEPLOY TO DEV (WORKING)
+  # ============================================================
   deploy_dev:
     runs-on: ubuntu-latest
-    if: >
+    if: |
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.head_branch == 'main'
     environment: dev
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
-      - uses: actions/download-artifact@v4
+      - name: Download build-output artifact from CI
+        uses: actions/download-artifact@v4
         with:
           name: build-output
           path: publish
           run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: azure/webapps-deploy@v3
+      - name: Deploy to DEV Web App
+        uses: azure/webapps-deploy@v3
         with:
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE_DEV }}
           package: publish
 
-# ============================================================
-# PHASE 2 – E2E TESTING (DEV)
-# ============================================================
+  # ============================================================
+  # PHASE 2 – E2E TESTING ON DEV
+  # ============================================================
   e2e_tests_dev:
     runs-on: ubuntu-latest
     needs: deploy_dev
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-dotnet@v4
+      - name: Setup .NET 9
+        uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "9.0.x"
 
-      - uses: browser-actions/setup-chrome@latest
-      - uses: browser-actions/setup-edge@v1
+      - name: Install Chrome
+        uses: browser-actions/setup-chrome@latest
 
-      - name: Run Selenium E2E (Chrome)
+      - name: Install Edge
+        uses: browser-actions/setup-edge@v1
+
+      - name: Run Selenium E2E tests (Chrome)
         env:
           BASE_URL: ${{ env.DEV_URL }}
-        run: dotnet test BPCalculator.E2E/BPCalculator.E2E.csproj
-
-      - name: Run Selenium E2E (Edge)
+          BROWSER: chrome
+        run: |
+          mkdir -p TestResults
+          dotnet test BPCalculator.E2E/BPCalculator.E2E.csproj \
+            --logger "trx;LogFileName=e2e-chrome.trx" \
+            --results-directory TestResults
+      - name: Run Selenium E2E tests (Edge)
         env:
           BASE_URL: ${{ env.DEV_URL }}
-        run: dotnet test BPCalculator.E2E/BPCalculator.E2E.csproj
+          BROWSER: edge
+        run: |
+          dotnet test BPCalculator.E2E/BPCalculator.E2E.csproj \
+            --logger "trx;LogFileName=e2e-edge.trx" \
+            --results-directory TestResults
+      - name: Upload E2E Test Reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: selenium-e2e-report
+          path: TestResults/
 
 # ============================================================
-# PHASE 3 – DEPLOY TO QA
+# PHASE 3 – DEPLOY TO QA SLOT
 # ============================================================
   deploy_qa:
     runs-on: ubuntu-latest
@@ -72,32 +95,48 @@ jobs:
     environment: qa
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
-      - uses: actions/download-artifact@v4
+      - name: Download build-output artifact from CI
+        uses: actions/download-artifact@v4
         with:
           name: build-output
           path: publish
           run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: azure/webapps-deploy@v3
+      - name: Deploy to QA Web App
+        uses: azure/webapps-deploy@v3
         with:
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE_QA }}
           package: publish
 
 # ============================================================
-# PHASE 4 – PERFORMANCE TEST (QA)
+# PHASE 4 – PERFORMANCE TESTING ON QA (NEW)
 # ============================================================
   performance_test_qa:
     runs-on: ubuntu-latest
     needs: deploy_qa
 
     steps:
-      - uses: grafana/k6-action@v0.2.0
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Run k6 Smoke Test on QA
+        uses: grafana/k6-action@v0.2.0
         env:
           APP_URL: ${{ env.QA_URL }}
+          K6_SUMMARY_EXPORT: perf-results/k6-summary.json
         with:
           filename: perf/k6-smoke.js
+
+      - name: Upload k6 Performance Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: k6-performance-report
+          path: perf-results/
 
 # ============================================================
 # PHASE 5 – SECURITY SCAN (NON-BLOCKING)
