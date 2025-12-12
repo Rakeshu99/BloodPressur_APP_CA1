@@ -24,8 +24,7 @@ jobs:
     environment: dev
 
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Download build artifact from CI
         uses: actions/download-artifact@v4
@@ -43,7 +42,7 @@ jobs:
 
 
 # ============================================================
-# PHASE 2 – E2E TESTING ON DEV
+# PHASE 2 – E2E TESTING ON DEV (CHROME + EDGE)
 # ============================================================
   e2e_tests_dev:
     runs-on: ubuntu-latest
@@ -52,18 +51,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "9.0.x"
 
-      - name: Install Chrome
-        uses: browser-actions/setup-chrome@latest
+      - uses: browser-actions/setup-chrome@latest
+      - uses: browser-actions/setup-edge@v1
 
-      - name: Install Edge
-        uses: browser-actions/setup-edge@v1
-
-      - name: Run Selenium E2E tests (Chrome)
+      - name: Run Selenium E2E (Chrome)
         env:
           BASE_URL: ${{ env.DEV_URL }}
           BROWSER: chrome
@@ -73,7 +68,7 @@ jobs:
             --logger "trx;LogFileName=e2e-chrome.trx" \
             --results-directory TestResults
 
-      - name: Run Selenium E2E tests (Edge)
+      - name: Run Selenium E2E (Edge)
         env:
           BASE_URL: ${{ env.DEV_URL }}
           BROWSER: edge
@@ -82,7 +77,7 @@ jobs:
             --logger "trx;LogFileName=e2e-edge.trx" \
             --results-directory TestResults
 
-      - name: Upload E2E Test Reports
+      - name: Upload E2E Reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -117,7 +112,7 @@ jobs:
 
 
 # ============================================================
-# PHASE 4 – PERFORMANCE TESTING ON QA
+# PHASE 4 – PERFORMANCE TESTING (QA)
 # ============================================================
   performance_test_qa:
     runs-on: ubuntu-latest
@@ -126,19 +121,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Prepare performance results folder
+      - name: Prepare results folder
         run: mkdir -p perf-results
 
-      - name: Run k6 Smoke Test
+      - name: k6 Smoke Test
         uses: grafana/k6-action@v0.2.0
         env:
           APP_URL: ${{ env.QA_URL }}
-          K6_SUMMARY_EXPORT: perf-results/k6-summary.json
+          K6_SUMMARY_EXPORT: perf-results/k6-smoke.json
         with:
           filename: perf/k6-smoke.js
 
-      - name: Upload k6 Performance Report
-        if: always()
+      - name: Upload k6 Report
         uses: actions/upload-artifact@v4
         with:
           name: k6-performance-report
@@ -146,38 +140,31 @@ jobs:
 
 
 # ============================================================
-# PHASE 5 – SECURITY TESTING ON QA (NON-BLOCKING)
+# PHASE 5 – SECURITY TESTING (QA – ZAP BASELINE)
 # ============================================================
   security_scan_qa:
     runs-on: ubuntu-latest
     needs: performance_test_qa
-    environment: qa
 
     steps:
-      - name: Run OWASP ZAP Baseline Scan (non-blocking)
+      - name: OWASP ZAP Baseline Scan
         uses: zaproxy/action-baseline@v0.11.0
-        continue-on-error: true
         with:
           target: ${{ env.QA_URL }}
           cmd_options: "-a"
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload ZAP Security Report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: zap-security-report
-          path: |
-            report_html.html
-            report_md.md
-            report_json.json
-            
+      # ZAP WARNINGS ARE ACCEPTABLE FOR BASELINE SCAN
+      continue-on-error: true
+
+
 # ============================================================
-# PHASE 6 – DEPLOY TO PROD SLOT (BLUE–GREEN)
+# PHASE 6 – DEPLOY TO PROD (MANUAL APPROVAL)
 # ============================================================
   deploy_prod:
     runs-on: ubuntu-latest
-    needs: approval_gate
-    environment: prod
+    needs: security_scan_qa
+    environment: prod   # <-- approval happens HERE (GitHub Environments)
 
     steps:
       - uses: actions/checkout@v4
@@ -190,8 +177,22 @@ jobs:
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Deploy to Production slot
+      - name: Deploy to PROD slot
         uses: azure/webapps-deploy@v3
         with:
-          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE_PROD }}
           package: publish
+
+
+# ============================================================
+# PHASE 7 – PROD SMOKE TEST
+# ============================================================
+  prod_smoke_test:
+    runs-on: ubuntu-latest
+    needs: deploy_prod
+
+    steps:
+      - name: Smoke test homepage
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" ${{ env.PROD_URL }})
+          if [ "$STATUS" != "200" ]; then exit 1; fi
