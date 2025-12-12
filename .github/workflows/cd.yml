@@ -40,6 +40,7 @@ jobs:
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE_DEV }}
           package: publish
 
+
   # ============================================================
   # PHASE 2 – E2E TESTING ON DEV
   # ============================================================
@@ -88,6 +89,7 @@ jobs:
           name: selenium-e2e-report
           path: TestResults/
 
+
   # ============================================================
   # PHASE 3 – DEPLOY TO QA SLOT
   # ============================================================
@@ -114,8 +116,9 @@ jobs:
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE_QA }}
           package: publish
 
+
   # ============================================================
-  # PHASE 4 – PERFORMANCE TESTING ON QA (NEW)
+  # PHASE 4 – PERFORMANCE TESTING ON QA
   # ============================================================
   performance_test_qa:
     runs-on: ubuntu-latest
@@ -124,6 +127,9 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
+
+      - name: Prepare performance results folder
+        run: mkdir -p perf-results
 
       - name: Run k6 Smoke Test on QA
         uses: grafana/k6-action@v0.2.0
