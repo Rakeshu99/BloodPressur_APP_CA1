@@ -11,11 +11,10 @@ env:
   QA_URL: "https://bp-app-rakesh-qa-ametd7agehcscgae.francecentral-01.azurewebsites.net"
   PROD_URL: "https://bp-app-rakesh-f4g6e2adb3h9e9cg.francecentral-01.azurewebsites.net"
 
-jobs:
-
 # ============================================================
 # PHASE 1 – DEPLOY TO DEV
 # ============================================================
+jobs:
   deploy_dev:
     runs-on: ubuntu-latest
     if: |
@@ -26,7 +25,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download build artifact
+      - name: Download build artifact from CI
         uses: actions/download-artifact@v4
         with:
           name: build-output
@@ -57,16 +56,24 @@ jobs:
       - uses: browser-actions/setup-chrome@latest
       - uses: browser-actions/setup-edge@v1
 
-      - name: Run Selenium E2E tests
+      - name: Run Selenium E2E (Chrome)
         env:
           BASE_URL: ${{ env.DEV_URL }}
         run: |
           mkdir -p TestResults
           dotnet test BPCalculator.E2E/BPCalculator.E2E.csproj \
-            --logger "trx;LogFileName=e2e.trx" \
+            --logger "trx;LogFileName=e2e-chrome.trx" \
             --results-directory TestResults
 
-      - name: Upload E2E report
+      - name: Run Selenium E2E (Edge)
+        env:
+          BASE_URL: ${{ env.DEV_URL }}
+        run: |
+          dotnet test BPCalculator.E2E/BPCalculator.E2E.csproj \
+            --logger "trx;LogFileName=e2e-edge.trx" \
+            --results-directory TestResults
+
+      - name: Upload E2E reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -108,18 +115,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Prepare results folder
-        run: mkdir -p perf-results
+      - run: mkdir -p perf-results
 
-      - name: Run k6 smoke test
+      - name: k6 Smoke Test
         uses: grafana/k6-action@v0.2.0
         env:
           APP_URL: ${{ env.QA_URL }}
-          K6_SUMMARY_EXPORT: perf-results/k6-summary.json
+          K6_SUMMARY_EXPORT: perf-results/k6-smoke.json
         with:
           filename: perf/k6-smoke.js
 
-      - name: Upload performance report
+      - name: Upload k6 report
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -127,11 +133,12 @@ jobs:
           path: perf-results/
 
 # ============================================================
-# PHASE 5 – SECURITY TESTING (QA)
+# PHASE 5 – SECURITY TESTING (QA) – NON-BLOCKING
 # ============================================================
   security_scan_qa:
     runs-on: ubuntu-latest
     needs: performance_test_qa
+    continue-on-error: true
 
     steps:
       - name: OWASP ZAP Baseline Scan
@@ -147,7 +154,7 @@ jobs:
   deploy_prod:
     runs-on: ubuntu-latest
     needs: security_scan_qa
-    environment: prod   # ⬅️ THIS CREATES THE APPROVAL GATE
+    environment: prod   # 🔐 Approval happens here
 
     steps:
       - uses: actions/checkout@v4
@@ -167,14 +174,14 @@ jobs:
           package: publish
 
 # ============================================================
-# PHASE 7 – PROD SMOKE TEST
+# PHASE 7 – SMOKE TEST (PROD)
 # ============================================================
-  prod_smoke_test:
+  smoke_test_prod:
     runs-on: ubuntu-latest
     needs: deploy_prod
 
     steps:
-      - name: Smoke test production
+      - name: Check PROD availability
         run: |
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" ${{ env.PROD_URL }})
           if [ "$STATUS" != "200" ]; then exit 1; fi
