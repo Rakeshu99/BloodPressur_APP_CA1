@@ -9,12 +9,13 @@ on:
 env:
   DEV_URL: "https://bp-app-rakesh-dev-djbbevbydxd0h2ds.francecentral-01.azurewebsites.net"
   QA_URL: "https://bp-app-rakesh-qa-ametd7agehcscgae.francecentral-01.azurewebsites.net"
+  PROD_URL: "https://bp-app-rakesh-f4g6e2adb3h9e9cg.francecentral-01.azurewebsites.net"
 
 jobs:
 
-  # ============================================================
-  # PHASE 1 – DEPLOY TO DEV (WORKING)
-  # ============================================================
+# ============================================================
+# PHASE 1 – DEPLOY TO DEV SLOT
+# ============================================================
   deploy_dev:
     runs-on: ubuntu-latest
     if: |
@@ -23,10 +24,10 @@ jobs:
     environment: dev
 
     steps:
-      - name: Checkout repo
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Download build-output artifact from CI
+      - name: Download build artifact from CI
         uses: actions/download-artifact@v4
         with:
           name: build-output
@@ -34,22 +35,22 @@ jobs:
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Deploy to DEV Web App
+      - name: Deploy to DEV slot
         uses: azure/webapps-deploy@v3
         with:
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE_DEV }}
           package: publish
 
 
-  # ============================================================
-  # PHASE 2 – E2E TESTING ON DEV
-  # ============================================================
+# ============================================================
+# PHASE 2 – E2E TESTING ON DEV
+# ============================================================
   e2e_tests_dev:
     runs-on: ubuntu-latest
     needs: deploy_dev
 
     steps:
-      - name: Checkout repo
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Setup .NET 9
@@ -82,7 +83,7 @@ jobs:
             --logger "trx;LogFileName=e2e-edge.trx" \
             --results-directory TestResults
 
-      - name: Upload E2E Test Reports
+      - name: Upload E2E test reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -90,19 +91,19 @@ jobs:
           path: TestResults/
 
 
-  # ============================================================
-  # PHASE 3 – DEPLOY TO QA SLOT
-  # ============================================================
+# ============================================================
+# PHASE 3 – DEPLOY TO QA SLOT
+# ============================================================
   deploy_qa:
     runs-on: ubuntu-latest
     needs: e2e_tests_dev
     environment: qa
 
     steps:
-      - name: Checkout repo
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Download build-output artifact from CI
+      - name: Download build artifact from CI
         uses: actions/download-artifact@v4
         with:
           name: build-output
@@ -110,28 +111,28 @@ jobs:
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Deploy to QA Web App
+      - name: Deploy to QA slot
         uses: azure/webapps-deploy@v3
         with:
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE_QA }}
           package: publish
 
 
-  # ============================================================
-  # PHASE 4 – PERFORMANCE TESTING ON QA
-  # ============================================================
+# ============================================================
+# PHASE 4 – PERFORMANCE TESTING ON QA
+# ============================================================
   performance_test_qa:
     runs-on: ubuntu-latest
     needs: deploy_qa
 
     steps:
-      - name: Checkout repo
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Prepare performance results folder
         run: mkdir -p perf-results
 
-      - name: Run k6 Smoke Test on QA
+      - name: Run k6 smoke test on QA
         uses: grafana/k6-action@v0.2.0
         env:
           APP_URL: ${{ env.QA_URL }}
@@ -139,9 +140,66 @@ jobs:
         with:
           filename: perf/k6-smoke.js
 
-      - name: Upload k6 Performance Report
+      - name: Upload k6 performance report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: k6-performance-report
           path: perf-results/
+
+
+# ============================================================
+# PHASE 5 – MANUAL APPROVAL BEFORE PROD
+# ============================================================
+  approval_gate:
+    runs-on: ubuntu-latest
+    needs: performance_test_qa
+    environment: production
+
+    steps:
+      - name: Await manual approval
+        uses: trstringer/manual-approval@v1
+        with:
+          approvers: "Rakeshu99"
+          minimum-approvals: 1
+
+
+# ============================================================
+# PHASE 6 – DEPLOY TO PRODUCTION SLOT
+# ============================================================
+  deploy_prod:
+    runs-on: ubuntu-latest
+    needs: approval_gate
+    environment: production
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download build artifact from CI
+        uses: actions/download-artifact@v4
+        with:
+          name: build-output
+          path: publish
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Deploy to Production slot
+        uses: azure/webapps-deploy@v3
+        with:
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE_PROD }}
+          package: publish
+
+
+# ============================================================
+# PHASE 7 – SMOKE TEST ON PRODUCTION
+# ============================================================
+  prod_smoke_test:
+    runs-on: ubuntu-latest
+    needs: deploy_prod
+
+    steps:
+      - name: Verify production homepage
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" ${{ env.PROD_URL }})
+          if [ "$STATUS" != "200" ]; then exit 1; fi
