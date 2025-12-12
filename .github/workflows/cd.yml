@@ -17,7 +17,7 @@ env:
   # 1. BUILD — executed once
  
 jobs:
-  # 1. DEPLOY TO QA
+  # 1. DEPLOY TO DEV
   deploy_qa:
     runs-on: ubuntu-latest
     # Only when CI succeeded AND branch is master
