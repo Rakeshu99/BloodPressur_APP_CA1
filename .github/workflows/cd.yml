@@ -150,6 +150,12 @@ jobs:
    continue-on-error: true
 
    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Create writable temp folder for ZAP
+      run: mkdir -p zap-temp
+
     - name: OWASP ZAP baseline scan (non-blocking)
       uses: zaproxy/action-baseline@v0.11.0
       with:
@@ -157,6 +163,7 @@ jobs:
         target: ${{ env.QA_URL }}
         cmd_options: "-a"
         artifact_name: "zap-scan-report"
+        workdir: "zap-temp"  # FIX: prevents permission denied
 
 # ============================================================
 # PHASE 6 – DEPLOY TO PROD (APPROVAL HAPPENS HERE)
