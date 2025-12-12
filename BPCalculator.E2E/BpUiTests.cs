@@ -8,7 +8,7 @@ namespace BPCalculator.E2E
 {
     public class BpUiTests
     {
-        private readonly string baseUrl = "http://localhost:5000";
+        private readonly string baseUrl = "https://bp-app-rakesh-dev-djbbevbydxd0h2ds.francecentral-01.azurewebsites.net";
 
         [Fact]
         public void UserCanCalculateBloodPressureCategory()
